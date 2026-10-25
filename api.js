@@ -47,7 +47,15 @@ function renderNotes(noteArray) {
         const body = document.createElement("p");
         body.textContent = note.body || "No body provided.";
 
-        item.append(title, body);
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "Delete";
+
+        deleteButton.addEventListener("click", function() {
+            deleteNote(note.id, deleteButton);
+        });
+
+        item.append(title, body, deleteButton);
         notesList.appendChild(item);
     });
 }
@@ -90,7 +98,6 @@ async function createNote(event) {
     const title = titleInput.value.trim();
     const body = bodyInput.value.trim();
 
-    // Validate the title before making an API request.
     if (!title) {
         statusMessage.textContent = "Please enter a title.";
         statusMessage.className = "status-error";
@@ -143,6 +150,40 @@ async function createNote(event) {
         console.error("Failed to create note:", error);
     } finally {
         submitButton.disabled = false;
+    }
+}
+
+// Task 3: Delete a note using DELETE.
+async function deleteNote(id, deleteButton) {
+    deleteButton.disabled = true;
+    statusMessage.textContent = "Deleting note...";
+    statusMessage.className = "status-loading";
+
+    try {
+        const result = await request(`${API_URL}/${id}`, {
+            method: "DELETE"
+        });
+
+        // JSONPlaceholder simulates DELETE; it does not persist changes.
+        // Remove the note from our local list only after the request succeeds.
+        notes = notes.filter(function(note) {
+            return note.id !== id;
+        });
+
+        renderNotes(notes);
+
+        statusMessage.textContent =
+            `Note ${id} deleted (status ${result.status}).`;
+        statusMessage.className = "status-success";
+    } catch (error) {
+        statusMessage.textContent =
+            "Sorry, we couldn't delete the note. Please try again.";
+        statusMessage.className = "status-error";
+
+        console.error("Failed to delete note:", error);
+    } finally {
+        // The button may no longer be in the DOM after a successful delete.
+        deleteButton.disabled = false;
     }
 }
 
