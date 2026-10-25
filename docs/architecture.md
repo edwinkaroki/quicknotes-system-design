@@ -1,156 +1,242 @@
-# QuickNotes System Architecture
+\# QuickNotes System Architecture
 
-## 1. Overview
+
+
+\## 1. Overview
+
+
 
 QuickNotes is a note-taking application that allows users to create, view, update, delete, and organize notes. The system is designed to support 1 million registered users while remaining secure, available, and responsive.
 
-## 2. Functional Requirements
 
-- Users can register and authenticate.
-- Users can create, view, edit, and delete their notes.
-- Users can organize notes using tags.
-- Users can access only notes they own.
-- The system validates requests and returns useful error messages.
 
-## 3. Non-Functional Requirements
+\## 2. Functional Requirements
 
-- **Performance:** Common note-reading requests should respond quickly.
-- **Scalability:** The application should handle increasing numbers of users and requests.
-- **Availability:** A failed application server should not take down the entire service.
-- **Security:** Authentication, authorization, input validation, and encrypted connections are required.
-- **Durability:** Notes should be stored reliably and backed up.
-- **Consistency:** Creating or editing a note should update the primary database before the operation is reported as successful.
 
-## 4. High-Level Architecture
+
+\- Users can register and authenticate.
+
+\- Users can create, view, edit, and delete their notes.
+
+\- Users can organize notes using tags.
+
+\- Users can access only notes they own.
+
+\- The system validates requests and returns useful error messages.
+
+
+
+\## 3. Non-Functional Requirements
+
+
+
+\- \*\*Performance:\*\* Common note-reading requests should respond quickly.
+
+\- \*\*Scalability:\*\* The application should handle increasing numbers of users and requests.
+
+\- \*\*Availability:\*\* A failed application server should not take down the entire service.
+
+\- \*\*Security:\*\* Authentication, authorization, input validation, and encrypted connections are required.
+
+\- \*\*Durability:\*\* Notes should be stored reliably and backed up.
+
+\- \*\*Consistency:\*\* Creating or editing a note should update the primary database before the operation is reported as successful.
+
+
+
+\## 4. High-Level Architecture
+
+
 
 ```text
-                    Users / Web Browser
-                            |
-                         DNS/CDN
-                            |
-                      Load Balancer
-                            |
-                 +----------+----------+
-                 |                     |
-             App Server 1          App Server 2
-                 |                     |
-                 +----------+----------+
-                            |
-                 +----------+----------+
-                 |                     |
-             Redis Cache          Message Queue
-                 |                     |
-                 |                 Background Worker
-                 |                     |
-                 +----------+----------+
-                            |
-                     Primary Database
-                            |
-                       Read Replica
+
+\&#x20;                   Users / Web Browser
+
+\&#x20;                           |
+
+\&#x20;                        DNS/CDN
+
+\&#x20;                           |
+
+\&#x20;                     Load Balancer
+
+\&#x20;                           |
+
+\&#x20;                +----------+----------+
+
+\&#x20;                |                     |
+
+\&#x20;            App Server 1          App Server 2
+
+\&#x20;                |                     |
+
+\&#x20;                +----------+----------+
+
+\&#x20;                           |
+
+\&#x20;                +----------+----------+
+
+\&#x20;                |                     |
+
+\&#x20;            Redis Cache          Message Queue
+
+\&#x20;                |                     |
+
+\&#x20;                |                 Background Worker
+
+\&#x20;                |                     |
+
+\&#x20;                +----------+----------+
+
+\&#x20;                           |
+
+\&#x20;                    Primary Database
+
+\&#x20;                           |
+
+\&#x20;                      Read Replica
+
 ```
 
-### Component Responsibilities
 
-- **DNS:** Directs users to the application’s domain.
-- **CDN:** Delivers static files such as CSS, JavaScript, and images from locations closer to users. Private note contents should not be publicly cached.
-- **Load balancer:** Distributes incoming requests across healthy application servers.
-- **Application servers:** Authenticate users, validate requests, enforce note ownership, and implement API operations. They remain stateless so requests can reach any healthy server.
-- **Redis cache:** Stores frequently accessed data to reduce repeated database reads. Cached note lists must be invalidated or updated after relevant changes.
-- **Primary database:** Stores authoritative user, note, and tag records and handles writes.
-- **Read replica:** Serves suitable read requests to reduce pressure on the primary database. Replication delay may mean that some recent changes are not immediately visible there.
-- **Message queue:** Holds background jobs, such as search indexing or analytics, so they do not delay normal API responses.
-- **Background worker:** Processes queued jobs independently of web requests.
 
-## 5. Example Request Flows
+\### Component Responsibilities
 
-### Reading Notes
 
-1. The browser sends an authenticated request to `GET /notes`.
-2. The load balancer forwards it to a healthy application server.
-3. The server verifies the user's identity and authorization.
-4. The server checks the cache for that user's note list.
-5. If the data is not cached, the server retrieves it from the database and may cache the result.
-6. The server returns the notes as JSON.
 
-### Creating a Note
+\- \*\*DNS:\*\* Directs users to the application’s domain.
 
-1. The browser sends `POST /notes` with the note title and body.
-2. The application server authenticates the user and validates the input.
-3. The server writes the new note to the primary database.
-4. The server invalidates any cached note list affected by the change.
-5. The server returns a successful response containing the created note.
-6. Any optional background work is added to the message queue.
+\- \*\*CDN:\*\* Delivers static files such as CSS, JavaScript, and images from locations closer to users. Private note contents should not be publicly cached.
 
-## 6. Capacity Estimates for 1 Million Registered Users
+\- \*\*Load balancer:\*\* Distributes incoming requests across healthy application servers.
 
-These are planning assumptions, not measured production traffic.
+\- \*\*Application servers:\*\* Authenticate users, validate requests, enforce note ownership, and implement API operations. They remain stateless so requests can reach any healthy server.
 
-Assume 10% of registered users are active each day: 100,000 daily active users.
+\- \*\*Redis cache:\*\* Stores frequently accessed data to reduce repeated database reads. Cached note lists must be invalidated or updated after relevant changes.
 
-### Reads per Second
+\- \*\*Primary database:\*\* Stores authoritative user, note, and tag records and handles writes.
 
-Assume each active user performs 50 note reads per day.
+\- \*\*Read replica:\*\* Serves suitable read requests to reduce pressure on the primary database. Replication delay may mean that some recent changes are not immediately visible there.
 
-- Daily reads: 100,000 × 50 = 5,000,000
-- Average reads per second: 5,000,000 ÷ 86,400 ≈ **58**
-- With a 5× peak traffic factor: approximately **290 reads per second**
+\- \*\*Message queue:\*\* Holds background jobs, such as search indexing or analytics, so they do not delay normal API responses.
 
-### Writes per Second
+\- \*\*Background worker:\*\* Processes queued jobs independently of web requests.
 
-Assume each active user creates one note per day.
 
-- Daily writes: 100,000 × 1 = 100,000
-- Average writes per second: 100,000 ÷ 86,400 ≈ **1.2**
-- With a 5× peak traffic factor: approximately **6 writes per second**
 
-These estimates exclude additional updates, deletes, retries, and background jobs.
+\## 5. Step-by-Step Photo Upload Flow
 
-### Storage per Year
 
-Assume each new note uses an average of 2 KB for its title, body, and metadata.
 
-- Notes created per year: 100,000 × 365 = 36,500,000
-- Raw note storage: 36,500,000 × 2 KB = **73 GB per year**, approximately
+SnapShare separates photo storage from image processing so that users can upload photos without waiting for every thumbnail to finish generating.
 
-This estimate excludes indexes, user and tag records, database replicas, backups, and storage overhead. Actual usage depends on note lengths and user activity.
 
-## 7. Caching Strategy
 
-Redis can cache frequently requested note lists using keys scoped to the user, such as `notes:user:123`.
+1\. \*\*Client initiates upload:\*\* The user selects a photo. The client sends an authenticated request to the application server to initiate the upload.
 
-When a note is created, edited, or deleted, the application invalidates the affected cache entry. This prevents stale lists from remaining cached indefinitely. Cache misses fall back to the database.
+2\. \*\*Authentication and validation:\*\* The application verifies the user's identity, checks upload permissions, and validates the file size and allowed image formats.
 
-The application must never return one user's private notes to another user because of an incorrectly shared cache key.
+3\. \*\*Upload to object storage:\*\* The application issues a short-lived, authorized upload URL. The client uploads the original image directly to object storage, reducing bandwidth and processing pressure on the application servers.
 
-## 8. Reliability and Avoiding Single Points of Failure
+4\. \*\*Create the database record:\*\* After the upload succeeds, the application creates a photo record in the relational database containing the photo ID, user ID, object key, dimensions, file size, and processing status.
 
-- Run multiple application server instances behind a health-checking load balancer.
-- Use database backups and a tested recovery procedure.
-- Configure database replication and a failover plan.
-- Deploy Redis and the message queue with suitable redundancy for the service's reliability requirements.
-- Monitor errors, latency, server health, database load, queue depth, and cache hit rates.
-- Test restoration from backups rather than assuming backups are usable.
+5\. \*\*Enqueue a background job:\*\* The application publishes a thumbnail-generation job to the message queue. The job contains the photo ID and object key, not the entire image binary.
 
-A read replica improves read capacity but is not a substitute for backups.
+6\. \*\*Process the image:\*\* A background worker consumes the job, retrieves the original image from object storage, generates the required thumbnail and resized variants, and saves them back to object storage.
 
-## 9. Trade-Offs
+7\. \*\*Update processing status:\*\* The worker updates the database record to indicate that processing has completed and records the object keys for the generated variants. If processing fails, the job can be retried safely, with repeated attempts prevented from creating duplicate results.
 
-### Caching vs. Freshness
+8\. \*\*Deliver the photo:\*\* The application returns photo metadata and authorized image URLs to the client. The CDN can serve eligible resized images to viewers, reducing repeated requests to the origin storage.
 
-Caching improves response times and reduces database load, but cached data can become stale. Invalidating affected cache entries after writes reduces this risk, at the cost of additional application logic.
 
-### Read Replicas vs. Immediate Consistency
 
-Read replicas reduce pressure on the primary database, but replication can lag. Requests that must immediately reflect a recent write can read from the primary database.
+\### Failure Handling
 
-### Asynchronous Jobs vs. Immediate Results
 
-A message queue keeps background processing from slowing API responses. However, queued tasks may finish later than the original request, so the system must monitor failures and retry jobs safely.
 
-### SQL vs. NoSQL
+The database and object store do not normally share a single atomic transaction. If an upload succeeds but creating the database record fails, the system should retry or clean up the orphaned object. If publishing a queue job fails after the database write, a transactional outbox or retry mechanism can ensure the job is eventually published. Failed jobs should be retried with limits and moved to a dead-letter queue for investigation when necessary.
 
-A relational database is a suitable starting point because users, notes, and tags have clear relationships and benefit from transactions and constraints. If growth eventually exceeds one database's capacity, the team can evaluate partitioning, read scaling, and other approaches using measured workload data.
 
-## 10. Conclusion
 
-QuickNotes uses stateless application servers, a load balancer, caching, a primary database with a read replica, and asynchronous background processing. Capacity estimates provide an initial sizing guide; monitoring real traffic will inform future scaling decisions.
+The photo record should distinguish between states such as `uploading`, `processing`, `completed`, and `failed`, so clients can understand the current status.
+
+
+
+\## 6. Architectural Trade-Offs
+
+
+
+\### Trade-Off 1: Synchronous vs. Asynchronous Thumbnail Generation
+
+
+
+\*\*Synchronous processing\*\* generates thumbnails during the original upload request. Its advantage is that the resized images are ready before the request completes. However, image processing increases response time and consumes application resources. During peak upload traffic, this can exhaust application workers and reduce the number of requests the system can handle.
+
+
+
+\*\*Asynchronous processing\*\* stores the original image first and sends a job to a message queue. Background workers generate thumbnails independently. This keeps uploads responsive and allows worker capacity to scale separately. The disadvantage is that thumbnails may not be available immediately, and the queue requires monitoring and retry handling.
+
+
+
+\*\*Decision:\*\* SnapShare uses asynchronous thumbnail generation because it separates expensive image processing from the user-facing upload request and handles bursts more effectively.
+
+
+
+\### Trade-Off 2: Primary Database vs. Read Replicas
+
+
+
+The primary database handles writes and provides the authoritative record of each photo. Read replicas can serve feed and metadata queries, reducing read pressure on the primary database.
+
+
+
+However, replication is often asynchronous. A newly uploaded photo may exist in the primary database before it appears on a replica. A user who immediately refreshes their feed could temporarily fail to see the photo.
+
+
+
+\*\*Decision:\*\* Use the primary database for writes and read replicas for suitable high-volume reads. For read-after-write operations, read from the primary database or use a consistency strategy that ensures the new record is visible before relying on a replica.
+
+
+
+\### Trade-Off 3: Caching vs. Freshness
+
+
+
+Redis and the CDN reduce repeated database queries and image transfers. This improves latency and reduces infrastructure load. However, cached feeds or image metadata may become stale after a photo is uploaded, updated, or deleted.
+
+
+
+\*\*Decision:\*\* Invalidate affected feed-cache entries after writes, use appropriate expiration policies, and use versioned image URLs for updated image variants. Private images must have suitable authorization and caching rules.
+
+
+
+\### Trade-Off 4: Object Storage vs. Database BLOBs
+
+
+
+Storing image binaries in object storage keeps the relational database focused on compact, searchable metadata. This reduces pressure on database memory, query performance, and database backups.
+
+
+
+The trade-off is that metadata and image files live in separate systems. Partial failures can create missing references or orphaned files.
+
+
+
+\*\*Decision:\*\* Store image binaries in object storage and references in the relational database. Use retries, reconciliation jobs, and cleanup policies to handle partial failures.
+
+
+
+\## 7. Conclusion
+
+
+
+SnapShare uses stateless application servers behind a load balancer, a CDN for image delivery, Redis for frequently accessed data, a relational database for metadata, object storage for image binaries, and a queue with background workers for thumbnail generation.
+
+
+
+The capacity estimates indicate approximately 116 peak uploads per second under the stated assumptions. The architecture addresses that load by separating upload handling from image processing and scaling application servers and workers independently.
+
+
+
+The design balances responsiveness, consistency, reliability, and cost. Its effectiveness should be validated through load testing and monitoring of upload latency, application-server saturation, queue backlog, database performance, and storage growth.
+
